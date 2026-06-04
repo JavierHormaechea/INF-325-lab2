@@ -1,100 +1,116 @@
-# INF-325 Laboratorio 2: MongoDB (Base de Datos Documental y Vectorial)
+# INF-325 Laboratorio 2: MongoDB — Base de Datos Documental y Vectorial
 
-Este proyecto implementa una base de datos local en MongoDB configurada como un **Replica Set** (1 Primario, 2 Secundarios) mediante Docker. Además, contiene scripts en Python para procesar un corpus de discursos históricos, transformarlos en embeddings (vectores espaciales) usando `SentenceTransformers`, y realizar búsquedas por similitud de coseno, simulando la base de un sistema RAG (Retrieval-Augmented Generation).
+Proyecto del curso **Bases de Datos Avanzadas (INF-325)** que implementa un sistema de búsqueda semántica sobre un corpus de 680 discursos políticos chilenos, utilizando MongoDB como base de datos vectorial y documental.
+
+## ¿Qué hace este proyecto?
+
+1. **Cluster de Alta Disponibilidad:** Levanta 3 instancias de MongoDB configuradas como un Replica Set (`rs0`) mediante Docker, con 1 nodo Primario y 2 Secundarios.
+2. **Preprocesamiento e Inserción:** Lee los 680 archivos `.txt` del corpus, genera un identificador SHA-256 por cada uno, calcula su embedding (vector de 768 dimensiones) usando un modelo de lenguaje en español, y los almacena en MongoDB.
+3. **Búsqueda Semántica:** Recibe una consulta en texto libre, la vectoriza con el mismo modelo, y devuelve los 5 discursos más relevantes ordenados por similitud de coseno.
+4. **Tolerancia a Fallos:** Incluye un script que demuestra automáticamente que el sistema sigue operativo (lectura y escritura) incluso cuando el nodo primario se cae, evidenciando la elección automática de un nuevo primario.
+
+## Estructura del Proyecto
+
+```
+INF-325-lab2/
+├── docker-compose.yml            # Define los 3 nodos de MongoDB
+├── init_replicaset.sh            # Levanta Docker e inicializa el Replica Set
+├── scripts/
+│   ├── fill_DB.py                # Procesa los discursos y los inserta en la BD
+│   ├── search.py                 # Script de búsqueda semántica
+│   ├── req4_failover_demo.sh     # Demostración de Alta Disponibilidad (Req 4)
+│   ├── requirements.txt          # Dependencias de Python
+│   └── .env                      # Variables de entorno (no se sube a Git)
+├── DiscursosOriginales/          # Corpus de 680 discursos .txt (no se sube a Git)
+├── .gitignore
+└── README.md
+```
 
 ## Requisitos Previos
 
-- **Docker** y **Docker Compose** instalados.
+- **Docker** y **Docker Compose** instalados y funcionando.
 - **Python 3.10+** instalado.
-- La carpeta `DiscursosOriginales` extraída con los archivos `.txt` en la raíz del proyecto.
+- La carpeta `DiscursosOriginales/` con los 680 archivos `.txt`, ubicada en la raíz del proyecto.
 
-## Pasos para Levantar el Proyecto
+## Instrucciones para Levantar el Proyecto
 
-> **Nota para el equipo:** Dado que la base de datos corre de manera local en contenedores de Docker, los datos no se suben a GitHub. **Cada miembro del equipo que clone este repositorio deberá ejecutar este proceso de carga por primera vez** para poblar su propia base de datos local.
+> **Importante:** La base de datos corre localmente dentro de contenedores Docker, por lo que los datos **no se suben a GitHub**. Cada persona que clone este repositorio deberá ejecutar todo este proceso una vez para poblar su propia base de datos local.
 
-### 1. Levantar la Infraestructura de MongoDB
-
-Inicia los contenedores y configura el clúster Replica Set ejecutando el script bash en la raíz del proyecto:
+### Paso 1 — Levantar la Infraestructura de MongoDB
 
 ```bash
-# Dar permisos de ejecución si es necesario
 chmod +x init_replicaset.sh
-
-# Ejecutar el script
 ./init_replicaset.sh
 ```
 
-Este script se encarga de:
-- Levantar 3 nodos (`mongo1`, `mongo2`, `mongo3`).
-- Inicializar el clúster `rs0`.
-- Crear la base de datos `Política` y la colección `Discursos`.
+Este script levanta los 3 contenedores, inicializa el Replica Set `rs0`, y crea la base de datos `Política` con la colección `Discursos`.
 
-### 2. Configurar el Entorno de Python
-
-El procesamiento de textos y la búsqueda requieren librerías de Machine Learning. Debes crear un entorno virtual e instalarlas:
+### Paso 2 — Crear el Entorno Virtual de Python
 
 ```bash
 cd scripts
 python3 -m venv venv
-
-# Activar el entorno virtual en Linux/Mac
 source venv/bin/activate
-# (Si estás en Windows usa: venv\Scripts\activate)
-
-# Instalar las librerías
 pip install -r requirements.txt
 ```
 
-### 3. Configurar las Variables de Entorno
+> En Windows usar `venv\Scripts\activate` en lugar de `source venv/bin/activate`.
 
-En la carpeta `scripts/`, crea un archivo llamado `.env` y coloca el siguiente contenido:
+### Paso 3 — Configurar las Variables de Entorno
+
+Dentro de la carpeta `scripts/`, crea un archivo llamado `.env` con el siguiente contenido:
 
 ```env
-# Conexión directa a localhost para evitar problemas de resolución de red de Docker desde el host
 MONGO_URI=mongodb://localhost:27017/?directConnection=true
-
-# Ruta donde se encuentran los archivos .txt originales
 FILES_PATH=../DiscursosOriginales
 ```
 
-### 4. Poblar la Base de Datos (Calcular Embeddings)
-
-Este script leerá los 680 discursos, los convertirá en vectores y los insertará en MongoDB. 
+### Paso 4 — Poblar la Base de Datos
 
 ```bash
-# Asegúrate de estar en la carpeta scripts y con el entorno activado
-python fill_DB.py
+python3 fill_DB.py
 ```
-*Atención: Este proceso toma algunos minutos la primera vez, ya que debe descargar el modelo de lenguaje (aprox. 500MB) y procesar cada texto.*
 
-### 5. Buscar Discursos por Similitud
+> **⏳ Este proceso tarda varios minutos** (entre 15 y 40 min dependiendo de tu computador). Esto es normal y esperado: el script debe cargar un modelo de Inteligencia Artificial (~500 MB) que convierte cada discurso en un vector matemático de 768 dimensiones (embedding). Este cálculo se hace localmente en tu CPU para cada uno de los 680 archivos de texto, lo cual es computacionalmente intensivo. Solo es necesario hacerlo una vez; después de esto, los datos quedan almacenados en los volúmenes de Docker y persisten entre reinicios.
 
-Una vez finalizada la carga de datos, puedes probar el buscador semántico ejecutando:
+### Paso 5 — Realizar Búsquedas Semánticas
+
+Con el entorno virtual activado y dentro de la carpeta `scripts/`:
 
 ```bash
-# Búsqueda por defecto
-python search.py
+# Búsqueda con texto personalizado
+python3 search.py "el impacto de la guerra en la economía mundial"
 
-# Búsqueda personalizada
-python search.py "el impacto de la guerra en la economía mundial"
+# Búsqueda con texto por defecto
+python3 search.py
 ```
-El script generará el embedding de tu consulta, buscará contra todos los documentos de MongoDB y usará la fórmula de **Similitud Coseno** para devolverte los 5 discursos más relevantes ordenados por puntaje.
 
-### 6. Evidencia del Requisito 4: Alta Disponibilidad
+El script vectoriza tu consulta, la compara contra los 680 discursos almacenados usando **Similitud de Coseno**, y muestra los 5 más relevantes.
 
-Para demostrar que el Replica Set sigue respondiendo ante la caída del nodo primario, puedes ejecutar el script de verificación incluido en `scripts/`:
+### Paso 6 — Demostración de Alta Disponibilidad (Requisito 4)
+
+Para demostrar que el Replica Set sigue respondiendo ante la caída del nodo primario:
 
 ```bash
 chmod +x scripts/req4_failover_demo.sh
 ./scripts/req4_failover_demo.sh
 ```
 
-El script:
-- detecta el primario actual del Replica Set,
-- inserta un documento de prueba,
-- detiene el nodo primario,
-- espera la elección de un nuevo primario,
-- vuelve a escribir y leer datos,
-- y finalmente reinicia el nodo original.
+Este script automáticamente:
+- Detecta cuál es el nodo primario actual.
+- Inserta un documento de prueba.
+- Detiene el nodo primario (simulando una falla).
+- Espera la elección automática de un nuevo primario.
+- Verifica que la lectura y escritura siguen funcionando.
+- Reinicia el nodo caído y muestra el estado final del cluster.
 
-La prueba deja una colección de demostración llamada `Req4Demo` para que puedas mostrar el resultado en la exposición.
+## Tecnologías Utilizadas
+
+| Tecnología | Uso |
+|---|---|
+| **MongoDB 7.0** | Base de datos documental y vectorial |
+| **Docker / Docker Compose** | Orquestación del Replica Set (3 nodos) |
+| **Python 3** | Scripts de procesamiento y búsqueda |
+| **sentence-transformers** | Generación de embeddings en español |
+| **scikit-learn** | Cálculo de similitud de coseno |
+| **pymongo** | Driver de conexión a MongoDB |
