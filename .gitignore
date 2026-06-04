@@ -1,2 +1,3 @@
-*.txt
+DiscursosOriginales/
+venv/
 .env
