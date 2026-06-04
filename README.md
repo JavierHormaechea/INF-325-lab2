@@ -79,3 +79,22 @@ python search.py
 python search.py "el impacto de la guerra en la economía mundial"
 ```
 El script generará el embedding de tu consulta, buscará contra todos los documentos de MongoDB y usará la fórmula de **Similitud Coseno** para devolverte los 5 discursos más relevantes ordenados por puntaje.
+
+### 6. Evidencia del Requisito 4: Alta Disponibilidad
+
+Para demostrar que el Replica Set sigue respondiendo ante la caída del nodo primario, puedes ejecutar el script de verificación incluido en `scripts/`:
+
+```bash
+chmod +x scripts/req4_failover_demo.sh
+./scripts/req4_failover_demo.sh
+```
+
+El script:
+- detecta el primario actual del Replica Set,
+- inserta un documento de prueba,
+- detiene el nodo primario,
+- espera la elección de un nuevo primario,
+- vuelve a escribir y leer datos,
+- y finalmente reinicia el nodo original.
+
+La prueba deja una colección de demostración llamada `Req4Demo` para que puedas mostrar el resultado en la exposición.

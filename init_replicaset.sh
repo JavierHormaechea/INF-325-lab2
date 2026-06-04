@@ -24,14 +24,19 @@ echo "    mongo1 está listo."
 # ── 3. Inicializar el Replica Set ────────────────────────────────────────────
 echo ">>> Inicializando Replica Set rs0..."
 docker exec mongo1 mongosh --quiet --eval '
-rs.initiate({
-  _id: "rs0",
-  members: [
-    { _id: 0, host: "mongo1:27017", priority: 2 },
-    { _id: 1, host: "mongo2:27017", priority: 1 },
-    { _id: 2, host: "mongo3:27017", priority: 1 }
-  ]
-});
+try {
+  rs.status();
+  print("Replica Set ya inicializado.");
+} catch (e) {
+  rs.initiate({
+    _id: "rs0",
+    members: [
+      { _id: 0, host: "mongo1:27017", priority: 2 },
+      { _id: 1, host: "mongo2:27017", priority: 1 },
+      { _id: 2, host: "mongo3:27017", priority: 1 }
+    ]
+  });
+}
 '
 
 # ── 4. Esperar a que el primario sea elegido ──────────────────────────────────
@@ -47,11 +52,13 @@ echo "    Primario elegido."
 # Nota: el hash SHA-256 es el campo "_id" (índice único automático).
 #       No se crea ningún índice hash separado.
 echo ">>> Creando base de datos 'Política' y colección 'Discursos'..."
-docker exec mongo1 mongosh --quiet --eval '
+docker exec mongo1 mongosh --quiet "mongodb://mongo1:27017,mongo2:27017,mongo3:27017/?replicaSet=rs0" --eval '
 db = db.getSiblingDB("Política");
 
 // Crear la colección explícitamente
-db.createCollection("Discursos");
+if (!db.getCollectionNames().includes("Discursos")) {
+  db.createCollection("Discursos");
+}
 
 // Índice de texto sobre el campo "texto" para búsquedas full-text
 db.Discursos.createIndex({ texto: "text" });
