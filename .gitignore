@@ -1,3 +1,6 @@
 DiscursosOriginales/
 venv/
 .env
+*.pdf
+
+

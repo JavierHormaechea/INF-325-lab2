@@ -1,26 +1,96 @@
 import hashlib
-from pathlib import Path
-from sentence_transformers import SentenceTransformer
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
+from pymongo import MongoClient
+from pymongo.errors import DuplicateKeyError
+from sentence_transformers import SentenceTransformer
 
-# Esta funcion recibe el path del documento y retorna los 3 parametros a almacenar en la base de datos hash, texto y embedding
-def process_documents(file_path, model):
-    h = hashlib.sha256()
-    file = open(file_path, "r", encoding="utf-8")
-    text = ""
-    for line in file:
-        h.update(line.encode('utf-8'))
-        text += line
-    file.close()
-    return h.hexdigest(), text, model.encode(text)
-
+# ── Configuración ─────────────────────────────────────────────────────────────
 load_dotenv()
 
-model = SentenceTransformer('hiiamsid/sentence_similarity_spanish_es')
+MONGO_URI  = os.getenv("MONGO_URI")
+FILES_PATH = os.getenv("FILES_PATH")
 
-folder = Path(os.getenv("FILES_PATH"))
+if not MONGO_URI:
+    raise EnvironmentError("Falta la variable MONGO_URI en el archivo .env")
+if not FILES_PATH:
+    raise EnvironmentError("Falta la variable FILES_PATH en el archivo .env")
 
-for file in folder.glob("*.txt"):
-    file_id, file_text, file_embedding = process_documents(file, model)
-    print(file_id, file_embedding) ############ ACA VA SE TIENE QUE INSERTAR LOS DATOS EN LA BD
+# ── Conexión al Replica Set ───────────────────────────────────────────────────
+client     = MongoClient(MONGO_URI)
+db         = client["Política"]
+collection = db["Discursos"]
+
+# ── Modelo de embeddings ──────────────────────────────────────────────────────
+model = SentenceTransformer("hiiamsid/sentence_similarity_spanish_es")
+
+
+def process_document(file_path: Path) -> dict:
+    """
+    Lee un archivo .txt y devuelve el documento listo para insertar en MongoDB
+    con la estructura oficial del laboratorio:
+        {
+            "_id":       "<hash SHA-256>",
+            "texto":     "<contenido completo>",
+            "embedding": [...]          # lista nativa de Python (float)
+        }
+    """
+    h = hashlib.sha256()
+    lines = []
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            h.update(line.encode("utf-8"))
+            lines.append(line)
+
+    texto     = "".join(lines)
+    sha256_id = h.hexdigest()
+    embedding = model.encode(texto).tolist()   # numpy → list[float]
+
+    return {
+        "_id":       sha256_id,
+        "texto":     texto,
+        "embedding": embedding,
+    }
+
+
+# ── Inserción con upsert (idempotente) ────────────────────────────────────────
+folder     = Path(FILES_PATH)
+txt_files  = sorted(folder.glob("*.txt"))
+total      = len(txt_files)
+insertados = 0
+omitidos   = 0
+
+print(f"Procesando {total} archivo(s) en '{folder}'...\n")
+
+for i, file_path in enumerate(txt_files, start=1):
+    doc = process_document(file_path)
+
+    # replace_one con upsert: inserta si no existe, reemplaza si ya está.
+    # El filtro usa _id → único garantizado por MongoDB sin índice extra.
+    result = collection.replace_one(
+        {"_id": doc["_id"]},
+        doc,
+        upsert=True,
+    )
+
+    if result.upserted_id is not None:
+        insertados += 1
+        estado = "INSERTADO"
+    else:
+        omitidos += 1
+        estado = "EXISTENTE"
+
+    print(f"[{i:>4}/{total}] {estado}  _id={doc['_id'][:16]}…  {file_path.name}")
+
+# ── Resumen ───────────────────────────────────────────────────────────────────
+print(f"\n{'='*60}")
+print(f"  Total procesados : {total}")
+print(f"  Insertados       : {insertados}")
+print(f"  Ya existían      : {omitidos}")
+print(f"  Colección        : Política.Discursos")
+print(f"{'='*60}")
+
+client.close()

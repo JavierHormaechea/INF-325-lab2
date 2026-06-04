@@ -1,2 +1,4 @@
 sentence-transformers==5.5.1
 python-dotenv==1.2.1
+pymongo==4.10.1
+numpy>=1.24
