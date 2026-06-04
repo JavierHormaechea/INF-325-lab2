@@ -1,6 +1,15 @@
-DiscursosOriginales/
+# Entorno virtual de Python
 venv/
+
+# Variables de entorno 
 .env
+
+# Archivos compilados de Python
+__pycache__/
+*.pyc
+
+# Corpus de discursos (muy pesado, cada uno lo descarga)
+DiscursosOriginales/
+
+# PDFs del enunciado
 *.pdf
-
-
