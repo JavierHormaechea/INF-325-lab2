@@ -114,3 +114,17 @@ Este script automáticamente:
 | **sentence-transformers** | Generación de embeddings en español |
 | **scikit-learn** | Cálculo de similitud de coseno |
 | **pymongo** | Driver de conexión a MongoDB |
+
+## Capturas de Evidencia
+
+La carpeta `CapturasEvidencia/` contiene capturas de pantalla que demuestran el correcto funcionamiento de cada requisito del laboratorio.
+
+| Captura | Archivo | Qué demuestra |
+|---|---|---|
+| **0** | `0_inicializacionRS.png` | **Inicialización del Replica Set.** Muestra la ejecución de `init_replicaset.sh`: se levantan los 3 contenedores Docker (mongo1, mongo2, mongo3), se inicializa el Replica Set `rs0`, se crea la base de datos `Política` con la colección `Discursos`, y se confirma que mongo1 es PRIMARY y los otros dos son SECONDARY. |
+| **1** | `1_contenedores.png` | **Estado del cluster en operación normal.** Muestra con `docker ps` que los 3 contenedores están corriendo con estado `healthy`, y con `rs.status()` que el Replica Set tiene los roles correctos: 1 PRIMARY + 2 SECONDARY. |
+| **2a** | `2_fillDB.png` | **Procesamiento e inserción de discursos (inicio).** Muestra el comienzo de la ejecución de `fill_DB.py`: se carga el modelo de lenguaje, y se procesan los 680 archivos `.txt` del corpus. En esta segunda ejecución todos aparecen como `EXISTENTE`, lo que demuestra la **idempotencia** del script (no inserta duplicados gracias al SHA-256 como `_id`). |
+| **2b** | `2_fillDB_idempotencia.png` | **Resumen final de la inserción.** Muestra las últimas líneas de `fill_DB.py` con el conteo final: `Total procesados: 680`, `Insertados: 0`, `Ya existían: 680`. Esto confirma que los 680 archivos fueron procesados correctamente y que la base de datos ya contenía todos los documentos. |
+| **3** | `3_estructuraDocumento.png` | **Estructura de un documento en MongoDB.** Consulta directa a la base de datos que muestra un documento real con sus 3 campos: `_id` (hash SHA-256 de 64 caracteres), `texto` (primeros 150 caracteres del discurso), y `embedding` (vector de 768 dimensiones con valores flotantes). Confirma que hay 679 documentos únicos en la colección (680 archivos menos 1 duplicado en el corpus original). |
+| **4** | `4_BusquedaSemantica.png` | **Búsqueda semántica funcionando.** Muestra la ejecución de `search.py` con la consulta *"la importancia de la educación para el desarrollo del país"*. El sistema devuelve los 5 discursos más relevantes ordenados por Similitud de Coseno (puntajes entre 0.48 y 0.51), con extractos del texto que confirman la relevancia temática de los resultados. |
+| **5-6** | `5_6_AltaDisponibilidad.png` | **Demostración completa de Alta Disponibilidad (failover).** Muestra la ejecución de `req4_failover_demo.sh`: se detecta que mongo1 es el primario, se inserta un documento de prueba, se detiene mongo1 simulando una falla, mongo2 es elegido automáticamente como nuevo primario, se verifica que la lectura y escritura siguen funcionando (se muestran los documentos `before-failover` y `after-failover`), se reinicia mongo1 y se confirma que vuelve al cluster como SECONDARY. |
