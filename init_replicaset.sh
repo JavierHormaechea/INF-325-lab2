@@ -49,8 +49,6 @@ done
 echo "    Primario elegido."
 
 # ── 5. Crear BD 'Política' y colección 'Discursos' ───────────────────────────
-# Nota: el hash SHA-256 es el campo "_id" (índice único automático).
-#       No se crea ningún índice hash separado.
 echo ">>> Creando base de datos 'Política' y colección 'Discursos'..."
 docker exec mongo1 mongosh --quiet "mongodb://mongo1:27017,mongo2:27017,mongo3:27017/?replicaSet=rs0" --eval '
 db = db.getSiblingDB("Política");

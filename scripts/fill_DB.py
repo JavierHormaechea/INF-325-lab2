@@ -29,13 +29,7 @@ model = SentenceTransformer("hiiamsid/sentence_similarity_spanish_es")
 
 def process_document(file_path: Path) -> dict:
     """
-    Lee un archivo .txt y devuelve el documento listo para insertar en MongoDB
-    con la estructura oficial del laboratorio:
-        {
-            "_id":       "<hash SHA-256>",
-            "texto":     "<contenido completo>",
-            "embedding": [...]          # lista nativa de Python (float)
-        }
+    Lee un archivo .txt y devuelve el documento listo para insertar en MongoDB.
     """
     h = hashlib.sha256()
     lines = []
@@ -68,8 +62,7 @@ print(f"Procesando {total} archivo(s) en '{folder}'...\n")
 for i, file_path in enumerate(txt_files, start=1):
     doc = process_document(file_path)
 
-    # replace_one con upsert: inserta si no existe, reemplaza si ya está.
-    # El filtro usa _id → único garantizado por MongoDB sin índice extra.
+    # Upsert del documento usando el _id.
     result = collection.replace_one(
         {"_id": doc["_id"]},
         doc,
